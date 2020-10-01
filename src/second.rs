@@ -17,6 +17,10 @@ pub struct List<T> {
 // Tuple structs as an alternative form of structs
 pub struct IntoIter<T>(List<T>);
 
+pub struct Iter<'a, T> {
+    next: Option<&'a Node<T>>,
+}
+
 type Link<T> = Option<Box<Node<T>>>;
 
 struct Node<T> {
@@ -55,6 +59,11 @@ impl<T> List<T> {
     pub fn into_iter(self) -> IntoIter<T> {
         IntoIter(self)
     }
+    pub fn iter(&self) -> Iter<'_, T> {
+        Iter {
+            next: self.head.as_ref().map(|node| &**node),
+        }
+    }
 }
 
 // Creating a custom iterator for the list
@@ -62,14 +71,16 @@ impl<T> List<T> {
 // here we build upon the standard Iterator
 // but we have to include the next() functionality
 
-impl<T> Iterator for IntoIter<T> {
-    type Item = T;
+impl<'a, T> Iterator for Iter<'a, T> {
+    type Item = &'a T;
+
     fn next(&mut self) -> Option<Self::Item> {
-        // access fields of a tuple struct numerically
-        self.0.pop()
+        self.next.map(|node| {
+            self.next = node.next.as_ref().map::<&Node<T>, _>(|node| &node);
+            &node.elem
+        })
     }
 }
-
 impl<T> Drop for List<T> {
     fn drop(&mut self) {
         let mut cur_link = self.head.take();
@@ -148,10 +159,22 @@ mod test {
         list.push(3);
 
         // List = [3,2,1]
-        let mut iter = list.into_iter();
-        assert_eq!(iter.next(), Some(3));
-        assert_eq!(iter.next(), Some(2));
-        assert_eq!(iter.next(), Some(1));
+        let mut iter = list.iter();
+        assert_eq!(iter.next(), Some(&3));
+        assert_eq!(iter.next(), Some(&2));
+        assert_eq!(iter.next(), Some(&1));
         assert_eq!(iter.next(), None);
+    }
+    #[test]
+    fn iter() {
+        let mut list = List::new();
+        list.push(1);
+        list.push(2);
+        list.push(3);
+
+        let mut iter = list.iter();
+        assert_eq!(iter.next(), Some(&3));
+        assert_eq!(iter.next(), Some(&2));
+        assert_eq!(iter.next(), Some(&1));
     }
 }
